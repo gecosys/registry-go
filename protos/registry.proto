@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package registry;
+
+service Registry {
+  rpc RegisterService (RegistrationForm) returns (Empty) {}
+  rpc GetService (Service) returns (Connection) {}
+}
+
+enum Environment {
+  Development = 0;
+  Production = 1;
+}
+
+message Empty {
+}
+
+message Service {
+  string name = 1;
+  Environment env = 2;
+}
+
+message Connection {
+  string IP = 1;
+  int32 port = 2;
+}
+
+message RegistrationForm {
+  Service service = 1;
+  Connection connection = 2;
+}
