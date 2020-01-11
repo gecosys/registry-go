@@ -23,7 +23,7 @@ func Get() *Config {
 
 	once.Do(func() {
 		instance = new(Config)
-		instance.Registry.Address = os.Getenv("SERVER_REGISTRY_ADDRESS")
+		instance.Registry.Address = os.Getenv("REGISTRY_SERVICE_ADDRESS")
 	})
 	return instance
 }
