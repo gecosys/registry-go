@@ -18,8 +18,8 @@ var onceInstance sync.Once
 var instance *service
 
 type Registry interface {
-	RegisterService(env Environment, name string, conn *Connection)
-	GetService(env Environment, name string) (*Connection, error)
+	RegisterService(code string, env Environment, name string, conn *Connection)
+	GetService(code string, env Environment, name string) (*Connection, error)
 }
 
 func Get() Registry {
@@ -36,13 +36,13 @@ func Get() Registry {
 type service struct {
 }
 
-func (s *service) RegisterService(env Environment, name string, conn *Connection) {
+func (s *service) RegisterService(code string, env Environment, name string, conn *Connection) {
 	onceRegister.Do(func() {
-		go s.loopRegisterService(env, name, conn)
+		go s.loopRegisterService(code, env, name, conn)
 	})
 }
 
-func (s *service) GetService(env Environment, name string) (*Connection, error) {
+func (s *service) GetService(code string, env Environment, name string) (*Connection, error) {
 	creds, err := credentials.NewClientTLSFromFile("keys/registry-server.crt", "")
 	if err != nil {
 		log.Fatal(err)
@@ -58,21 +58,22 @@ func (s *service) GetService(env Environment, name string) (*Connection, error) 
 	return NewRegistryClient(dial).GetService(
 		context.Background(),
 		&Service{
+			Code: code,
 			Env:  env,
 			Name: name,
 		},
 	)
 }
 
-func (s *service) loopRegisterService(env Environment, name string, conn *Connection) {
+func (s *service) loopRegisterService(code string, env Environment, name string, conn *Connection) {
 	var timer = time.NewTimer(0)
 	for range timer.C {
-		s.doRegisterService(env, name, conn)
+		s.doRegisterService(code, env, name, conn)
 		timer.Reset(1 * time.Second)
 	}
 }
 
-func (s *service) doRegisterService(env Environment, name string, conn *Connection) {
+func (s *service) doRegisterService(code string, env Environment, name string, conn *Connection) {
 	var (
 		err  error
 		dial *grpc.ClientConn
@@ -99,6 +100,7 @@ func (s *service) doRegisterService(env Environment, name string, conn *Connecti
 		context.Background(),
 		&RegistrationForm{
 			Service: &Service{
+				Code: code,
 				Env:  env,
 				Name: name,
 			},

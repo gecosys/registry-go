@@ -18,6 +18,7 @@ message Empty {
 message Service {
   string name = 1;
   Environment env = 2;
+  string code = 3;
 }
 
 message Connection {
