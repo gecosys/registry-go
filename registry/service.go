@@ -4,7 +4,7 @@ import (
 	"context"
 	fmt "fmt"
 	"log"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	config "github.com/gecosys/registry-go/config"
@@ -13,8 +13,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-var onceRegister sync.Once
-var onceInstance sync.Once
+var mtxRegistryFlag uint32
 var instance *service
 
 type Registry interface {
@@ -23,23 +22,28 @@ type Registry interface {
 }
 
 func Get() Registry {
-	if instance != nil {
+	if atomic.SwapUint32(&mtxRegistryFlag, 1) == 1 {
 		return instance
 	}
-
-	onceInstance.Do(func() {
-		instance = new(service)
-	})
+	instance = new(service)
+	instance.services = make(map[string]chan bool)
 	return instance
 }
 
 type service struct {
+	services map[string]chan bool
 }
 
 func (s *service) RegisterService(code string, env Environment, name string, conn *Connection) {
-	onceRegister.Do(func() {
-		go s.loopRegisterService(code, env, name, conn)
-	})
+	key := fmt.Sprintf("%s_%s_%s", code, env, name)
+	done, ok := s.services[key]
+	if ok {
+		done <- true
+	} else {
+		done = make(chan bool)
+		s.services[key] = done
+	}
+	go s.loopRegisterService(code, env, name, conn, done)
 }
 
 func (s *service) GetService(code string, env Environment, name string) (*Connection, error) {
@@ -65,11 +69,16 @@ func (s *service) GetService(code string, env Environment, name string) (*Connec
 	)
 }
 
-func (s *service) loopRegisterService(code string, env Environment, name string, conn *Connection) {
+func (s *service) loopRegisterService(code string, env Environment, name string, conn *Connection, done chan bool) {
 	var timer = time.NewTimer(0)
-	for range timer.C {
-		s.doRegisterService(code, env, name, conn)
-		timer.Reset(1 * time.Second)
+	for {
+		select {
+		case <-done:
+			return
+		case <-timer.C:
+			s.doRegisterService(code, env, name, conn)
+			timer.Reset(1 * time.Second)
+		}
 	}
 }
 
